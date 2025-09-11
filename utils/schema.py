@@ -215,6 +215,22 @@ class GeneralConfig(SubscriptableModel):
             "If None, uses output_dir/skimmed/ and creates if needed.",
         ),
     ]
+    metadata_dir: Annotated[
+        Optional[str],
+        Field(
+            default=None,
+            description="Directory containing existing metadata JSON files. "
+            "If None, uses output_dir/metadata/ and creates if needed.",
+        ),
+    ]
+    skimmed_dir: Annotated[
+        Optional[str],
+        Field(
+            default=None,
+            description="Directory containing existing skimmed ROOT files. "
+            "If None, uses output_dir/skimmed/ and creates if needed.",
+        ),
+    ]
     processes: Annotated[
         Optional[List[str]],
         Field(
