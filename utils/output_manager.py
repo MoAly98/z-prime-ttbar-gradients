@@ -6,6 +6,7 @@ with support for user-specified paths for metadata and skimmed files.
 """
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
@@ -36,18 +37,24 @@ class OutputDirectoryManager:
         root_output_dir : str
             Root directory for all analysis outputs
         cache_dir : str, optional
-            Cache directory for temporary files. If None, uses /tmp/gradients_analysis/
+            Cache directory for temporary files. If None, uses system temp directory with 'graep' subdirectory.
         metadata_dir : str, optional
             Directory containing metadata JSON files. If None, looks under root_output_dir/metadata/
         skimmed_dir : str, optional
             Directory containing skimmed ROOT files. If None, looks under root_output_dir/skimmed/
         """
-        self.root_output_dir = Path(root_output_dir)
-        self.cache_dir = Path(cache_dir) if cache_dir else Path("/tmp/gradients_analysis/")
+        # Normalize root output directory path
+        self.root_output_dir = Path(root_output_dir).expanduser().resolve()
 
-        # User-specified directories (if provided)
-        self._user_metadata_dir = Path(metadata_dir) if metadata_dir else None
-        self._user_skimmed_dir = Path(skimmed_dir) if skimmed_dir else None
+        # Normalize cache directory path or use system temp directory
+        if cache_dir:
+            self.cache_dir = Path(cache_dir).expanduser().resolve()
+        else:
+            self.cache_dir = Path(tempfile.gettempdir()) / "graep"
+
+        # User-specified directories (if provided) - normalize paths
+        self._user_metadata_dir = Path(metadata_dir).expanduser().resolve() if metadata_dir else None
+        self._user_skimmed_dir = Path(skimmed_dir).expanduser().resolve() if skimmed_dir else None
 
         # Standard subdirectory structure
         self._subdirs = {
@@ -92,10 +99,14 @@ class OutputDirectoryManager:
             If directory doesn't exist and no user-specified path
         """
         if self._user_metadata_dir:
-            # User specified a metadata directory - check if it exists
+            # User specified a metadata directory - check if it exists and is a directory
             if not self._user_metadata_dir.exists():
                 raise FileNotFoundError(
-                    f"User-specified metadata directory does not exist: {self._user_metadata_dir}"
+                    f"Metadata path not found: {self._user_metadata_dir}"
+                )
+            if not self._user_metadata_dir.is_dir():
+                raise NotADirectoryError(
+                    f"Metadata path is not a directory: {self._user_metadata_dir}"
                 )
             return self._user_metadata_dir
         else:
@@ -140,10 +151,14 @@ class OutputDirectoryManager:
             If directory doesn't exist and no user-specified path
         """
         if self._user_skimmed_dir:
-            # User specified a skimmed directory - check if it exists
+            # User specified a skimmed directory - check if it exists and is a directory
             if not self._user_skimmed_dir.exists():
                 raise FileNotFoundError(
-                    f"User-specified skimmed directory does not exist: {self._user_skimmed_dir}"
+                    f"Skimmed path not found: {self._user_skimmed_dir}"
+                )
+            if not self._user_skimmed_dir.is_dir():
+                raise NotADirectoryError(
+                    f"Skimmed path is not a directory: {self._user_skimmed_dir}"
                 )
             return self._user_skimmed_dir
         else:

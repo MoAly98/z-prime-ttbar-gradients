@@ -194,8 +194,9 @@ class GeneralConfig(SubscriptableModel):
     cache_dir: Annotated[
         Optional[str],
         Field(
-            default="/tmp/graep/",
-            description="Cache directory for intermediate products of the analysis.",
+            default=None,
+            description="Cache directory for intermediate products of the analysis. "
+            "If None, uses system temp directory with 'graep' subdirectory.",
         ),
     ]
     metadata_dir: Annotated[
