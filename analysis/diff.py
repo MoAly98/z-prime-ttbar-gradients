@@ -45,6 +45,7 @@ from utils.plot import (
     plot_pvalue_vs_parameters,
 )
 from utils.tools import nested_defaultdict_to_dict, recursive_to_backend, get_function_arguments
+from utils.output_manager import OutputDirectoryManager
 
 
 # =============================================================================
@@ -715,7 +716,7 @@ class DifferentiableAnalysis(Analysis):
     - Training MVA models using JAX or TensorFlow frameworks.
     """
 
-    def __init__(self, config: dict[str, Any], processed_datasets: Optional[Dict[str, List[Tuple[Any, Dict[str, Any]]]]] = None) -> None:
+    def __init__(self, config: dict[str, Any], processed_datasets: Dict[str, List[Tuple[Any, Dict[str, Any]]]], output_manager: OutputDirectoryManager) -> None:
         """
         Initialise the DifferentiableAnalysis with configuration and processed datasets.
 
@@ -723,10 +724,12 @@ class DifferentiableAnalysis(Analysis):
         ----------
         config : dict
             Analysis configuration dictionary.
-        processed_datasets : Optional[Dict[str, List[Tuple[Any, Dict[str, Any]]]]], optional
-            Pre-processed datasets from skimming, by default None
+        processed_datasets : Dict[str, List[Tuple[Any, Dict[str, Any]]]]
+            Pre-processed datasets from skimming (required)
+        output_manager : OutputDirectoryManager
+            Centralized output directory manager (required)
         """
-        super().__init__(config, processed_datasets)
+        super().__init__(config, processed_datasets, output_manager)
 
         # Histogram storage:
         # histograms[variation][region][observable] = jnp.ndarray
@@ -734,7 +737,15 @@ class DifferentiableAnalysis(Analysis):
         self.histograms: dict[str, dict[str, dict[str, jnp.ndarray]]] = (
             defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
         )
-        self._prepare_dirs()
+
+        # Create directory shortcuts for convenience
+        self.dirs = {
+            "output": self.output_manager.get_root_dir(),
+            "mva_models": self.output_manager.get_models_dir(),
+            "optimisation_plots": self.output_manager.get_plots_dir("optimisation"),
+            "fit_plots": self.output_manager.get_plots_dir("fit"),
+            "mva_plots": self.output_manager.get_plots_dir("mva")
+        }
 
     def _set_histograms(
         self, histograms: dict[str, dict[str, dict[str, jnp.ndarray]]]
@@ -750,52 +761,6 @@ class DifferentiableAnalysis(Analysis):
         # Replace the current histogram store with new results
         self.histograms = histograms
 
-    def _prepare_dirs(self) -> None:
-        """
-        Create necessary output directories for analysis results.
-
-        This includes:
-        - General output directory structure
-        - Cache directory for storing gradients
-        - Optional preprocessed input directory
-        - Directories for storing MVA models, optimisation plots, and fit plots
-        """
-        # Ensure the output/ directory and common structure are prepared
-        self.dirs = super()._prepare_dirs()
-
-        # Create cache directory for gradient checkpoints and intermediate results
-        cache = Path(
-            self.config.general.cache_dir or "/tmp/gradients_analysis/"
-        )
-        cache.mkdir(parents=True, exist_ok=True)
-
-
-        # Directory for trained MVA models
-        mva = self.dirs["output"] / "mva_models"
-        mva.mkdir(parents=True, exist_ok=True)
-
-        # Output plots from analysis cut optimisation step
-        optimisation_plots = self.dirs["output"] / "plots" / "optimisation"
-        optimisation_plots.mkdir(parents=True, exist_ok=True)
-
-        # Output plots from fit or profiling stage
-        fit_plots = self.dirs["output"] / "plots" / "fit"
-        fit_plots.mkdir(parents=True, exist_ok=True)
-
-        # Directory for MVA plots (subdirectories created during plotting)
-        mva_plots = self.dirs["output"] / "mva_plots"
-        mva_plots.mkdir(parents=True, exist_ok=True)
-
-        # Register the created paths in the analysis directory registry
-        self.dirs.update(
-            {
-                "cache": cache,
-                "mva_models": mva,
-                "optimisation_plots": optimisation_plots,
-                "fit_plots": fit_plots,
-                "mva_plots": mva_plots,
-            }
-        )
 
     def _log_config_summary(self) -> None:
         """Logs a structured summary of the key analysis configuration options."""
@@ -1159,7 +1124,7 @@ class DifferentiableAnalysis(Analysis):
                     net.process_to_features_map,
                     mva_cfg,
                     self.config.plotting,
-                    self.dirs["mva_plots"],
+                    self.output_manager.get_plots_dir("mva"),
                 )
                 params = net.train(Xtr, ytr, Xvl, yvl)
                 trained[mva_cfg.name] = params
@@ -1787,7 +1752,6 @@ class DifferentiableAnalysis(Analysis):
         params: dict[str, Any],
         read_from_cache: bool = False,
         run_and_cache: bool = True,
-        cache_dir: Optional[str] = "/tmp/gradients_analysis/",
         recreate_fit_params: bool = False,
     ) -> dict[str, dict[str, dict[str, Any]]]:
         """
@@ -1801,8 +1765,6 @@ class DifferentiableAnalysis(Analysis):
             Read preprocessed events from cache.
         run_and_cache : bool
             Process events and cache results.
-        cache_dir : str, optional
-            Directory for cached events.
 
         Returns
         -------
@@ -2030,9 +1992,9 @@ class DifferentiableAnalysis(Analysis):
             for model_name in models.keys():
                 model = models[model_name]
                 net = nets[model_name]
-                model_path = self.dirs["mva_models"] / f"{model_name}.pkl"
+                model_path = self.output_manager.get_models_dir() / f"{model_name}.pkl"
                 net_path = (
-                    self.dirs["mva_models"] / f"{model_name}_network.pkl"
+                    self.output_manager.get_models_dir() / f"{model_name}_network.pkl"
                 )
                 with open(model_path, "wb") as f:
                     cloudpickle.dump(model, f)
@@ -2083,7 +2045,6 @@ class DifferentiableAnalysis(Analysis):
         """
         # Log a summary of the configuration being used for this run
         self._log_config_summary()
-        cache_dir = "/tmp/gradients_analysis/"
         # ---------------------------------------------------------------------
         # If not just plotting, begin gradient-based optimisation chain
         # ---------------------------------------------------------------------
@@ -2110,7 +2071,6 @@ class DifferentiableAnalysis(Analysis):
                     all_parameters,
                     read_from_cache=read_from_cache,
                     run_and_cache=run_and_cache,
-                    cache_dir=cache_dir,
                 )
             )
 
@@ -2375,7 +2335,7 @@ class DifferentiableAnalysis(Analysis):
             # Caching
             # ----------------------------------------------------------------------
             # Cache optimisation results
-            with open(f"{cache_dir}/cached_result.pkl", "wb") as f:
+            with open(self.output_manager.get_cache_dir() / "cached_result.pkl", "wb") as f:
                 cloudpickle.dump(
                     {
                         "params": final_params,
@@ -2409,7 +2369,7 @@ class DifferentiableAnalysis(Analysis):
         # ---------------------------------------------------------------------
         # 4. Reload results and generate summary plots
         # ---------------------------------------------------------------------
-        with open(f"{cache_dir}/cached_result.pkl", "rb") as f:
+        with open(self.output_manager.get_cache_dir() / "cached_result.pkl", "rb") as f:
             results = cloudpickle.load(f)
 
         final_params = results["params"]

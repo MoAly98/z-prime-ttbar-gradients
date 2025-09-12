@@ -49,6 +49,7 @@ def workitem_analysis(
     workitem: WorkItem,
     config: SkimmingConfig,
     configuration: Any,
+    output_manager,
     file_counters: Dict[str, int],
     part_counters: Dict[str, int],
     is_mc: bool = True,
@@ -67,6 +68,8 @@ def workitem_analysis(
         Skimming configuration with selection functions and output settings
     configuration : Any
         Main analysis configuration object containing branch selections
+    output_manager : OutputDirectoryManager
+        Centralized output directory manager
     file_counters : Dict[str, int]
         Pre-computed mapping of file keys to file numbers
     part_counters : Dict[str, int]
@@ -134,7 +137,7 @@ def workitem_analysis(
         output_files = []
         if processed_events > 0:
             output_file = _create_output_file_path(
-                workitem, config, file_counters, part_counters
+                workitem, output_manager, file_counters, part_counters
             )
             _save_workitem_output(
                 filtered_events, output_file, config, configuration, is_mc
@@ -189,7 +192,7 @@ def reduce_results(
 
 def _create_output_file_path(
     workitem: WorkItem,
-    config: SkimmingConfig,
+    output_manager,
     file_counters: Dict[str, int],
     part_counters: Dict[str, int],
 ) -> Path:
@@ -198,14 +201,14 @@ def _create_output_file_path(
     counters.
 
     Uses the same output structure as the current skimming code:
-    {output_dir}/{dataset}/file__{file_idx}/part_{chunk}.root
+    {skimmed_dir}/{dataset}/file__{file_idx}/part_{chunk}.root
 
     Parameters
     ----------
     workitem : WorkItem
         The workitem being processed
-    config : SkimmingConfig
-        Skimming configuration with output directory
+    output_manager : OutputDirectoryManager
+        Centralized output directory manager
     file_counters : Dict[str, int]
         Pre-computed mapping of file keys to file numbers
     part_counters : Dict[str, int]
@@ -226,9 +229,9 @@ def _create_output_file_path(
     file_number = file_counters[file_key]
     part_number = part_counters[part_key]
 
-    # Create output directory structure
-    base_dir = Path(config.output_dir)
-    dataset_dir = base_dir / dataset / f"file__{file_number}"
+    # Create output directory structure using output manager
+    skimmed_dir = output_manager.get_skimmed_dir()
+    dataset_dir = skimmed_dir / dataset / f"file__{file_number}"
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
     # Create output filename with entry-range-based part number
@@ -346,9 +349,11 @@ class WorkitemSkimmingManager:
     ----------
     config : SkimmingConfig
         Skimming configuration with selection functions and output settings
+    output_manager : OutputDirectoryManager
+        Centralized output directory manager
     """
 
-    def __init__(self, config: SkimmingConfig):
+    def __init__(self, config: SkimmingConfig, output_manager):
         """
         Initialize the workitem skimming manager.
 
@@ -356,8 +361,11 @@ class WorkitemSkimmingManager:
         ----------
         config : SkimmingConfig
             Skimming configuration with selection functions and output settings
+        output_manager : OutputDirectoryManager
+            Centralized output directory manager
         """
         self.config = config
+        self.output_manager = output_manager
         logger.info("Initialized workitem-based skimming manager")
 
     def process_workitems(
@@ -421,6 +429,7 @@ class WorkitemSkimmingManager:
                     wi,
                     self.config,
                     configuration,
+                    self.output_manager,
                     file_counters,
                     part_counters,
                     is_mc=self._is_monte_carlo(wi.dataset),
@@ -492,7 +501,7 @@ class WorkitemSkimmingManager:
 
         for workitem in workitems:
             expected_output = _create_output_file_path(
-                workitem, self.config, file_counters, part_counters
+                workitem, self.output_manager, file_counters, part_counters
             )
 
             if expected_output.exists():
@@ -655,9 +664,9 @@ class WorkitemSkimmingManager:
 def process_workitems_with_skimming(
     workitems: List[WorkItem],
     config: Any,
+    output_manager,
     fileset: Optional[Dict[str, Any]] = None,
     nanoaods_summary: Optional[Dict[str, Any]] = None,
-    cache_dir: str = "/tmp/gradients_analysis/",
 ) -> Dict[str, Any]:
     """
     Process workitems using the workitem-based skimming approach with event
@@ -676,13 +685,12 @@ def process_workitems_with_skimming(
         List of workitems to process, typically from NanoAODMetadataGenerator.workitems
     config : Any
         Main analysis configuration object containing skimming and preprocessing settings
+    output_manager : OutputDirectoryManager
+        Centralized output directory manager
     fileset : Optional[Dict[str, Any]], default None
         Fileset containing metadata including cross-sections for normalization
     nanoaods_summary : Optional[Dict[str, Any]], default None
         NanoAODs summary containing event counts per dataset for nevts metadata
-    cache_dir : str, default "/tmp/gradients_analysis/"
-        Directory for caching merged events. Cached files use the pattern:
-        {cache_dir}/{dataset}__{hash}.pkl where hash is based on input file paths
 
     Returns
     -------
@@ -694,7 +702,7 @@ def process_workitems_with_skimming(
     logger.info(f"Starting workitem preprocessing with {len(workitems)} workitems")
 
     # Create workitem skimming manager
-    skimming_manager = WorkitemSkimmingManager(config.preprocess.skimming)
+    skimming_manager = WorkitemSkimmingManager(config.preprocess.skimming, output_manager)
 
     # Group workitems by dataset
     workitems_by_dataset = {}
@@ -765,7 +773,8 @@ def process_workitems_with_skimming(
             sorted_files = sorted(output_files)
             cache_input = f"{dataset}::{':'.join(sorted_files)}"
             cache_key = hashlib.md5(cache_input.encode()).hexdigest()
-            cache_file = os.path.join(cache_dir, f"{dataset}__{cache_key}.pkl")
+            cache_dir = output_manager.get_cache_dir()
+            cache_file = cache_dir / f"{dataset}__{cache_key}.pkl"
 
             # Check if we should read from cache
             if config.general.read_from_cache and os.path.exists(cache_file):
@@ -814,7 +823,6 @@ def process_workitems_with_skimming(
 
                     # Cache the merged events
                     try:
-                        os.makedirs(cache_dir, exist_ok=True)
                         with open(cache_file, "wb") as f:
                             cloudpickle.dump(merged_events, f)
                         logger.info(f"Cached events for {dataset}")
