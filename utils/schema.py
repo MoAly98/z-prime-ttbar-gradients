@@ -194,7 +194,7 @@ class GeneralConfig(SubscriptableModel):
     cache_dir: Annotated[
         Optional[str],
         Field(
-            default="/tmp/gradients_analysis/",
+            default="/tmp/graep/",
             description="Cache directory for intermediate products of the analysis.",
         ),
     ]

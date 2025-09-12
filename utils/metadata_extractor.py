@@ -350,9 +350,8 @@ class NanoAODMetadataGenerator:
         Generates and returns the full paths for all metadata JSON files.
 
         These paths are consistently derived from the `self.output_directory`
-        attribute, which is set from `dataset_manager.config.metadata_output_dir`
-        during initialization. This ensures all read/write operations target the
-        same locations.
+        attribute, which is set from the output manager's metadata directory.
+        This ensures all read/write operations target the same locations.
 
         Returns
         -------

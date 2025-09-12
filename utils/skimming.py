@@ -667,7 +667,6 @@ def process_workitems_with_skimming(
     output_manager,
     fileset: Optional[Dict[str, Any]] = None,
     nanoaods_summary: Optional[Dict[str, Any]] = None,
-    cache_dir: str = "/tmp/gradients_analysis/",
 ) -> Dict[str, Any]:
     """
     Process workitems using the workitem-based skimming approach with event
@@ -692,9 +691,6 @@ def process_workitems_with_skimming(
         Fileset containing metadata including cross-sections for normalization
     nanoaods_summary : Optional[Dict[str, Any]], default None
         NanoAODs summary containing event counts per dataset for nevts metadata
-    cache_dir : str, default "/tmp/gradients_analysis/"
-        Directory for caching merged events. Cached files use the pattern:
-        {cache_dir}/{dataset}__{hash}.pkl where hash is based on input file paths
 
     Returns
     -------
@@ -777,7 +773,8 @@ def process_workitems_with_skimming(
             sorted_files = sorted(output_files)
             cache_input = f"{dataset}::{':'.join(sorted_files)}"
             cache_key = hashlib.md5(cache_input.encode()).hexdigest()
-            cache_file = os.path.join(cache_dir, f"{dataset}__{cache_key}.pkl")
+            cache_dir = output_manager.get_cache_dir()
+            cache_file = cache_dir / f"{dataset}__{cache_key}.pkl"
 
             # Check if we should read from cache
             if config.general.read_from_cache and os.path.exists(cache_file):
@@ -826,7 +823,6 @@ def process_workitems_with_skimming(
 
                     # Cache the merged events
                     try:
-                        os.makedirs(cache_dir, exist_ok=True)
                         with open(cache_file, "wb") as f:
                             cloudpickle.dump(merged_events, f)
                         logger.info(f"Cached events for {dataset}")

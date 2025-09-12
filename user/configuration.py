@@ -52,7 +52,7 @@ general_config = {
         "processor": "uproot",
         "lumifile": "./corrections/Cert_271036-284044_13TeV_Legacy2016_"\
             "Collisions16_JSON.txt",
-        "cache_dir": "/tmp/gradients_analysis/",
+        "cache_dir": "/tmp/graep/",
         # Optional: specify existing metadata/skimmed directories
         # "metadata_dir": "path/to/existing/metadata/",
         # "skimmed_dir": "path/to/existing/skimmed/",

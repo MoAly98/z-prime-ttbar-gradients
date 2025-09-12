@@ -21,6 +21,7 @@ from correctionlib import Correction, CorrectionSet
 
 from utils.schema import GoodObjectMasksConfig
 from utils.tools import get_function_arguments
+from utils.output_manager import OutputDirectoryManager
 
 # -----------------------------
 # Register backends
@@ -65,7 +66,7 @@ class Analysis:
         self,
         config: Dict[str, Any],
         processed_datasets: Dict[str, List[Tuple[Any, Dict[str, Any]]]],
-        output_manager,
+        output_manager: OutputDirectoryManager,
     ) -> None:
         """
         Initialize analysis with configuration for systematics, corrections,

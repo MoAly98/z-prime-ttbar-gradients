@@ -486,7 +486,7 @@ Global settings that control the overall workflow of the analysis.
 | `run_mva_training`  | `bool`       | `False`                     | Run MVA model pre-training.                               |
 | `read_from_cache`   | `bool`       | `True`                      | Read preprocessed data from cache if available.           |
 | `output_dir`        | `str`        | `"output/"`                 | **Root directory for all analysis outputs.** All other outputs are organised as subdirectories under this path. |
-| `cache_dir`         | `str`        | `"/tmp/gradients_analysis/"`| Cache directory for temporary files during differentiable analysis. |
+| `cache_dir`         | `str`        | `"/tmp/graep/"`| Cache directory for temporary files during differentiable analysis. |
 | `metadata_dir`      | `str`        | `None`                      | **Optional.** Directory containing existing metadata JSON files. If not specified, looks under `output_dir/metadata/`. |
 | `skimmed_dir`       | `str`        | `None`                      | **Optional.** Directory containing existing skimmed ROOT files. If not specified, looks under `output_dir/skimmed/`. |
 | `processes`         | `list[str]`  | `None`                      | Limit analysis to specific processes.                     |

@@ -17,6 +17,7 @@ from utils.output_files import (
     save_histograms_to_pickle,
     save_histograms_to_root,
 )
+from utils.output_manager import OutputDirectoryManager
 from utils.stats import get_cabinetry_rebinning_router
 from utils.tools import get_function_arguments
 
@@ -37,7 +38,7 @@ logging.getLogger("jax._src.xla_bridge").setLevel(logging.ERROR)
 # -----------------------------
 class NonDiffAnalysis(Analysis):
 
-    def __init__(self, config: dict[str, Any], processed_datasets: Dict[str, List[Tuple[Any, Dict[str, Any]]]], output_manager) -> None:
+    def __init__(self, config: dict[str, Any], processed_datasets: Dict[str, List[Tuple[Any, Dict[str, Any]]]], output_manager: OutputDirectoryManager) -> None:
         """
         Initialize ZprimeAnalysis with configuration and processed datasets.
 
@@ -54,17 +55,6 @@ class NonDiffAnalysis(Analysis):
         super().__init__(config, processed_datasets, output_manager)
         self.nD_hists_per_region = self._init_histograms()
 
-    def _prepare_dirs(self):
-        # 1) create top-level output
-        super()._prepare_dirs()
-
-        # 2) Use output manager for directory creation
-        self.dirs.update(
-            {
-                "histograms": self.output_manager.get_histograms_dir(),
-                "statistics": self.output_manager.get_statistics_dir(),
-            }
-        )
 
     def _init_histograms(self) -> dict[str, dict[str, hist.Hist]]:
         """

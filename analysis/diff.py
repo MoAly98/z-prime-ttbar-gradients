@@ -45,6 +45,7 @@ from utils.plot import (
     plot_pvalue_vs_parameters,
 )
 from utils.tools import nested_defaultdict_to_dict, recursive_to_backend, get_function_arguments
+from utils.output_manager import OutputDirectoryManager
 
 
 # =============================================================================
@@ -715,7 +716,7 @@ class DifferentiableAnalysis(Analysis):
     - Training MVA models using JAX or TensorFlow frameworks.
     """
 
-    def __init__(self, config: dict[str, Any], processed_datasets: Dict[str, List[Tuple[Any, Dict[str, Any]]]], output_manager) -> None:
+    def __init__(self, config: dict[str, Any], processed_datasets: Dict[str, List[Tuple[Any, Dict[str, Any]]]], output_manager: OutputDirectoryManager) -> None:
         """
         Initialise the DifferentiableAnalysis with configuration and processed datasets.
 
@@ -1751,7 +1752,6 @@ class DifferentiableAnalysis(Analysis):
         params: dict[str, Any],
         read_from_cache: bool = False,
         run_and_cache: bool = True,
-        cache_dir: Optional[str] = "/tmp/gradients_analysis/",
         recreate_fit_params: bool = False,
     ) -> dict[str, dict[str, dict[str, Any]]]:
         """
@@ -1765,8 +1765,6 @@ class DifferentiableAnalysis(Analysis):
             Read preprocessed events from cache.
         run_and_cache : bool
             Process events and cache results.
-        cache_dir : str, optional
-            Directory for cached events.
 
         Returns
         -------
@@ -2047,7 +2045,6 @@ class DifferentiableAnalysis(Analysis):
         """
         # Log a summary of the configuration being used for this run
         self._log_config_summary()
-        cache_dir = "/tmp/gradients_analysis/"
         # ---------------------------------------------------------------------
         # If not just plotting, begin gradient-based optimisation chain
         # ---------------------------------------------------------------------
@@ -2074,7 +2071,6 @@ class DifferentiableAnalysis(Analysis):
                     all_parameters,
                     read_from_cache=read_from_cache,
                     run_and_cache=run_and_cache,
-                    cache_dir=cache_dir,
                 )
             )
 
@@ -2339,7 +2335,7 @@ class DifferentiableAnalysis(Analysis):
             # Caching
             # ----------------------------------------------------------------------
             # Cache optimisation results
-            with open(f"{cache_dir}/cached_result.pkl", "wb") as f:
+            with open(self.output_manager.get_cache_dir() / "cached_result.pkl", "wb") as f:
                 cloudpickle.dump(
                     {
                         "params": final_params,
@@ -2373,7 +2369,7 @@ class DifferentiableAnalysis(Analysis):
         # ---------------------------------------------------------------------
         # 4. Reload results and generate summary plots
         # ---------------------------------------------------------------------
-        with open(f"{cache_dir}/cached_result.pkl", "rb") as f:
+        with open(self.output_manager.get_cache_dir() / "cached_result.pkl", "rb") as f:
             results = cloudpickle.load(f)
 
         final_params = results["params"]
