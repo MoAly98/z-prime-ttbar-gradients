@@ -363,7 +363,7 @@ You can override certain configuration options directly from the command line us
 
 **Example:**
 ```python
-python run.py general.max_files=10 general.run_systematics=False
+python analysis.py general.max_files=10 general.run_systematics=False
 ```
 
 **Important Limitations:**
@@ -486,7 +486,7 @@ python analysis.py general.run_metadata_generation=False general.run_skimming=Fa
 The framework automatically:
 - Generates metadata using coffea's preprocessing tools to create work-items
 - Processes work-items in parallel using dask.bag for robust failure handling
-- Creates output directories following the pattern `{output_dir}/{dataset}/file__{idx}/part_{chunk}.root`
+- Creates output directories following the pattern `{output_dir}/skimmed/{dataset}/file__{idx}/part_{chunk}.root`
 - Merges and caches events from multiple output files per dataset for efficient analysis
 
 ---
