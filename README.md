@@ -375,7 +375,6 @@ datasets_config = [
 
 dataset_manager_config = {
     "datasets": datasets_config,
-    "metadata_output_dir": "outputs/metadata/nanoaods_jsons/",
     "max_files": None  # No limit by default
 }
 ```
@@ -401,7 +400,6 @@ def default_skim_selection(muons, puppimet, hlt):
 skimming_config = {
     "selection_function": default_skim_selection,
     "selection_use": [("Muon", None), ("PuppiMET", None), ("HLT", None)],
-    "output_dir": "skimmed_output/",
     "chunk_size": 100_000,
     "tree_name": "Events",
 }
@@ -417,6 +415,10 @@ from user.skim import dataset_manager_config, skimming_config
 
 config = {
     "general": {
+        "output_dir": "example/outputs/",  # Root directory for all outputs
+        # Optional: specify existing directories to read from
+        # "metadata_dir": "/path/to/existing/metadata/",
+        # "skimmed_dir": "/path/to/existing/skimmed/",
         "run_skimming": True,  # Enabled by default
         "run_metadata_generation": True,
     },
@@ -483,8 +485,10 @@ Global settings that control the overall workflow of the analysis.
 | `run_plots_only`    | `bool`       | `False`                     | Generate plots from cached results only.                  |
 | `run_mva_training`  | `bool`       | `False`                     | Run MVA model pre-training.                               |
 | `read_from_cache`   | `bool`       | `True`                      | Read preprocessed data from cache if available.           |
-| `output_dir`        | `str`        | `"output/"`                 | Root directory for all analysis outputs.                  |
-| `cache_dir`         | `str`        | `"/tmp/gradients_analysis/"`| Cache directory for differentiable analysis.             |
+| `output_dir`        | `str`        | `"output/"`                 | **Root directory for all analysis outputs.** All other outputs are organised as subdirectories under this path. |
+| `cache_dir`         | `str`        | `"/tmp/gradients_analysis/"`| Cache directory for temporary files during differentiable analysis. |
+| `metadata_dir`      | `str`        | `None`                      | **Optional.** Directory containing existing metadata JSON files. If not specified, looks under `output_dir/metadata/`. |
+| `skimmed_dir`       | `str`        | `None`                      | **Optional.** Directory containing existing skimmed ROOT files. If not specified, looks under `output_dir/skimmed/`. |
 | `processes`         | `list[str]`  | `None`                      | Limit analysis to specific processes.                     |
 | `channels`          | `list[str]`  | `None`                      | Limit analysis to specific channels.                      |
 
@@ -510,7 +514,6 @@ Configuration for dataset management and metadata generation.
 | Parameter            | Type       | Default           | Description                                    |
 |----------------------|------------|-------------------|------------------------------------------------|
 | `datasets`          | `list[dict]` | *Required*      | List of dataset configurations (see below).   |
-| `metadata_output_dir` | `str`     | `"datasets/nanoaods_jsons/"` | Directory for metadata JSON files. |
 | `max_files`         | `int`      | `None`           | Maximum number of files to process per dataset. |
 
 #### Dataset Configuration
@@ -536,9 +539,10 @@ Configuration for the work-item-based skimming step.
 |----------------------|------------|-------------------|------------------------------------------------|
 | `selection_function` | `Callable` | *Required*        | Selection function that returns a PackedSelection object. |
 | `selection_use`      | `list[tuple]` | *Required*     | List of (object, variable) tuples specifying inputs for the selection function. |
-| `output_dir`         | `str`      | *Required*        | Base directory for skimmed files. Files follow structure: {output_dir}/{dataset}/file__{idx}/part_X.root |
 | `chunk_size`         | `int`      | `100000`         | Number of events to process per chunk (used for configuration compatibility). |
 | `tree_name`          | `str`      | `"Events"`       | ROOT tree name for input and output files.   |
+
+**Note:** Skimmed files are automatically organised under `general.output_dir/skimmed/` following the structure: `{output_dir}/skimmed/{dataset}/file__{idx}/part_X.root`
 
 ---
 
@@ -818,9 +822,10 @@ Alongside the differentiable path, the framework fully supports a traditional, n
 
 ## Directory Structure
 
+### Repository Structure
 ```
 ├── user/                    # USER-CONFIGURABLE MODULES - Modify these for your analysis
-│   ├── __init__.py         # Package initialization
+│   ├── __init__.py         # Package initialisation
 │   ├── configuration.py    # Main configuration file for the analysis
 │   ├── cuts.py            # Selection logic (both hard and soft/differentiable)
 │   ├── observables.py     # Physics observables and reconstruction functions
@@ -835,9 +840,10 @@ Alongside the differentiable path, the framework fully supports a traditional, n
 │   ├── skimming.py        # Work-item-based event skimming and preprocessing
 │   ├── mva.py             # MVA (neural network) model definitions and training logic
 │   ├── schema.py          # Pydantic schemas for validating the configuration
-│   ├── plot.py            # Plotting utilities and visualization functions
+│   ├── plot.py            # Plotting utilities and visualisation functions
 │   ├── stats.py           # Statistical analysis functions
 │   ├── jax_stats.py       # JAX-based statistical analysis functions
+│   ├── output_manager.py  # Centralised output directory management
 │   ├── tools.py           # General utility functions
 │   ├── logging.py         # Logging configuration utilities
 │   ├── output_files.py    # Output management utilities
@@ -848,6 +854,57 @@ Alongside the differentiable path, the framework fully supports a traditional, n
 │   └── ...                # Correction files (e.g., from `correctionlib`)
 └── README.md
 ```
+
+### Output Directory Structure
+
+The framework now uses a **centralised output directory management system** that organises all outputs under a single root directory specified by `general.output_dir`. The default structure is:
+
+```
+output/                      # Root output directory (configurable via general.output_dir)
+├── cache/                   # Temporary files and gradients cache
+├── metadata/                # JSON metadata files (fileset.json, workitems.json, etc.)
+├── skimmed/                 # Skimmed ROOT files organised by dataset
+│   ├── {dataset}/
+│   │   └── file__{idx}/
+│   │       └── part_{chunk}.root
+├── plots/                   # All visualisation outputs
+│   ├── features/            # Feature distribution plots
+│   ├── scores/              # MVA score plots
+│   ├── optimisation/        # Parameter optimisation plots
+│   └── fit/                 # Statistical fit plots
+├── models/                  # Trained MVA models (.pkl files)
+├── histograms/              # Analysis histograms (.root and .pkl files)
+└── statistics/              # Statistical analysis results
+```
+
+#### Flexible Directory Configuration
+
+You can customise where the framework looks for metadata and skimmed files:
+
+```python
+# Use default structure under output_dir
+general_config = {
+    "output_dir": "my_analysis_outputs/",
+}
+
+# Or specify existing directories to read from
+general_config = {
+    "output_dir": "my_analysis_outputs/",
+    "metadata_dir": "/shared/existing/metadata/",  # Read metadata from here
+    "skimmed_dir": "/shared/existing/skimmed/",    # Read skimmed files from here
+}
+```
+
+**Fallback Logic:**
+- If `metadata_dir` is specified, the framework reads metadata from that location
+- If not specified, it looks under `output_dir/metadata/`
+- If neither exists and metadata is needed, the framework will error with a helpful message
+- Same logic applies to `skimmed_dir` and `output_dir/skimmed/`
+
+This design allows you to:
+- **Share preprocessed data** between analyses by pointing to existing directories
+- **Keep outputs organised** in a predictable structure
+- **Easily find results** in one centralised location
 
 ### Key Design Principle
 
@@ -910,7 +967,7 @@ For each optimization step:
 - **Histograms**: Events are binned using Kernel Density Estimation (KDE) - smooth and differentiable
 - **Significance**: Statistical model computes discovery significance using the `relaxed` library
 - **Gradients**: JAX computes gradients of significance w.r.t. all parameters in `config.jax.params`
-- **Updates**: Optimizer (optax) updates parameters to maximize significance
+- **Updates**: Optimiser (optax) updates parameters to maximise significance
 
 ### 6. Parameter Flow Through the System
 ```
